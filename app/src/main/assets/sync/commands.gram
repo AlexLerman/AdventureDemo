@@ -1,0 +1,12 @@
+#JSGF V1.0;
+
+grammar commands;
+
+public <sentence> =
+  <verb> <filler>* <noun> |
+  combine <filler>* <noun> <filler>* <noun>;
+
+<verb> = pick up | play | drop | go | look at | inspect | examine | open | close ;
+<filler> = uh | a | with | to | the ;
+<noun> = knife | pear | painting | koala | jackhammer | plant | wall | nail | robot | existential angst | charlie | caroline ;
+

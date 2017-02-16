@@ -40,10 +40,12 @@ import java.util.HashMap;
 import java.util.Locale;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.TextView;
 import android.widget.Toast;
 import edu.cmu.pocketsphinx.Assets;
@@ -61,27 +63,28 @@ public class PocketSphinxActivity extends Activity implements
     /* Named searches allow to quickly reconfigure the decoder */
     private static final String KWS_SEARCH = "wakeup";
     private static final String FORECAST_SEARCH = "forecast";
-    private static final String DIGITS_SEARCH = "north";
+    private static final String DIGITS_SEARCH = "digits";
     private static final String PHONE_SEARCH = "phones";
     private static final String MENU_SEARCH = "menu";
-    
+    private static final String COMMAND_SEARCH = "command";
+
+
     /* Keyword we are looking for to activate menu */
     private static final String KEYPHRASE = "okay";
 
     private SpeechRecognizer recognizer;
     private HashMap<String, Integer> captions;
 
+
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
-
+//        inputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         // Prepare the data for UI
         captions = new HashMap<String, Integer>();
         captions.put(KWS_SEARCH, R.string.kws_caption);
         captions.put(MENU_SEARCH, R.string.menu_caption);
-        captions.put(DIGITS_SEARCH, R.string.digits_caption);
-        captions.put(PHONE_SEARCH, R.string.phone_caption);
-        captions.put(FORECAST_SEARCH, R.string.forecast_caption);
+        captions.put(COMMAND_SEARCH, R.string.command_caption);
         setContentView(R.layout.main);
         ((TextView) findViewById(R.id.caption_text))
                 .setText("Preparing the recognizer");
@@ -108,7 +111,7 @@ public class PocketSphinxActivity extends Activity implements
                     ((TextView) findViewById(R.id.caption_text))
                             .setText("Failed to init recognizer " + result);
                 } else {
-                    switchSearch(KWS_SEARCH);
+                    switchSearch(COMMAND_SEARCH);
                 }
             }
         }.execute();
@@ -126,27 +129,20 @@ public class PocketSphinxActivity extends Activity implements
      * keyword spotting mode we can react here, in other modes we need to wait
      * for final result in onResult.
      */
+    private boolean humanIsTalking;
+
     @Override
     public void onPartialResult(Hypothesis hypothesis) {
         if (hypothesis == null)
     	    return;
-
+        humanIsTalking = true;
         String text = hypothesis.getHypstr();
-        if (text.equals(KEYPHRASE)) {
-            recognizer.stop();
-            ((TextView) findViewById(R.id.result_text)).setText(text);
+        ((TextView) findViewById(R.id.result_text)).setText(text);
 
-//            launchRecognizer();
-        }
-//            switchSearch(MENU_SEARCH);
-//        else if (text.equals(DIGITS_SEARCH))
-//            switchSearch(DIGITS_SEARCH);
-//        else if (text.equals(PHONE_SEARCH))
-//            switchSearch(PHONE_SEARCH);
-//        else if (text.equals(FORECAST_SEARCH))
-//            switchSearch(FORECAST_SEARCH);
-//        else
-//        ((TextView) findViewById(R.id.result_text)).setText(text);
+//        if (text.equals(KEYPHRASE)) {
+//            recognizer.stop();
+//            ((TextView) findViewById(R.id.result_text)).setText(text);
+//}
     }
 
     /**
@@ -154,74 +150,21 @@ public class PocketSphinxActivity extends Activity implements
      */
     @Override
     public void onResult(Hypothesis hypothesis) {
+        System.out.println("Result: " + hypothesis.getHypstr());
         ((TextView) findViewById(R.id.result_text)).setText("");
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
 
-            makeText(getApplicationContext(), text, Toast.LENGTH_SHORT).show();
-            launchRecognizer();
-        }
-    }
-
-    private void launchRecognizer() {
-        promptSpeechInput();
-    }
-
-    private void promptSpeechInput() {
-        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-//        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS);
-        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,
-                getString(R.string.speech_prompt));
-        try {
-            startActivityForResult(intent, REQ_CODE_SPEECH_INPUT);
-        } catch (ActivityNotFoundException a) {
-            Toast.makeText(getApplicationContext(),
-                    getString(R.string.speech_not_supported),
-                    Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /**
-     * Receiving speech input
-     * */
-
-//    @Override
-//    public void onPartialResults(Bundle partialResults) {
-//        // This is supported (only?) by Google Voice Search.
-//        // The following is Google-specific.
-//        Log.i("onPartialResults: keySet: " + partialResults.keySet());
-//        String[] results = partialResults.getStringArray("com.google.android.voicesearch.UNSUPPORTED_PARTIAL_RESULTS");
-//        //double[] resultsConfidence = partialResults.getDoubleArray("com.google.android.voicesearch.UNSUPPORTED_PARTIAL_RESULTS_CONFIDENCE");
-//        if (results != null) {
-//            setPartialResult(results);
-//        }
-//    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        switch (requestCode) {
-            case REQ_CODE_SPEECH_INPUT: {
-                if (resultCode == RESULT_OK && null != data) {
-
-                    ArrayList<String> result = data
-                            .getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-                    makeText(getApplicationContext(), result.get(0), Toast.LENGTH_LONG).show();
-                    parseText(result.get(0));
-                    recognizer.startListening(KWS_SEARCH);
-                }
-                break;
-            }
-
+//        ((TextView) findViewById(R.id.result_text)).setText(text);
+            parseText(text);
         }
     }
 
     protected void parseText(String text){
+        System.out.println("Parsing text");
+        makeText(getApplicationContext(),
+                getString(R.string.command_caption),
+                Toast.LENGTH_LONG).show();
         String[] separated = text.split(" ");
         if (separated[0].equalsIgnoreCase("play")){
             if (separated[1].equalsIgnoreCase("charlie")) {
@@ -252,15 +195,17 @@ public class PocketSphinxActivity extends Activity implements
      */
     @Override
     public void onEndOfSpeech() {
-        if (!recognizer.getSearchName().equals(KWS_SEARCH))
-            switchSearch(KWS_SEARCH);
+        if (humanIsTalking){
+            recognizer.stop();
+            humanIsTalking = false;
+        }
     }
 
     private void switchSearch(String searchName) {
         recognizer.stop();
         
         // If we are not spotting, start listening with timeout (10000 ms or 10 seconds).
-        if (searchName.equals(KWS_SEARCH))
+        if (searchName.equals(COMMAND_SEARCH))
             recognizer.startListening(searchName);
         else
             recognizer.startListening(searchName, 10000);
@@ -277,11 +222,11 @@ public class PocketSphinxActivity extends Activity implements
                 .setAcousticModel(new File(assetsDir, "en-us-ptm"))
                 .setDictionary(new File(assetsDir, "cmudict-en-us.dict"))
                 
-                // To disable logging of raw audio comment out this call (takes a lot of space on the device)
-                .setRawLogDir(assetsDir)
+//                // To disable logging of raw audio comment out this call (takes a lot of space on the device)
+//                .setRawLogDir(assetsDir)
                 
                 // Threshold to tune for keyphrase to balance between false alarms and misses
-                .setKeywordThreshold(1e-10f)
+                .setKeywordThreshold(1e-5f)
                 
                 // Use context-independent phonetic search, context-dependent is too slow for mobile
                 .setBoolean("-allphone_ci", true)
@@ -293,21 +238,18 @@ public class PocketSphinxActivity extends Activity implements
          * They are added here for demonstration. You can leave just one.
          */
 
-        // Create keyword-activation search.
-        recognizer.addKeyphraseSearch(KWS_SEARCH, KEYPHRASE);
-        
-//        // Create grammar-based search for selection between demos
-//        File menuGrammar = new File(assetsDir, "menu.gram");
-//        recognizer.addGrammarSearch(MENU_SEARCH, menuGrammar);
+//        // Create keyword-activation search.
+//        recognizer.addKeyphraseSearch(COMMAND_SEARCH, KEYPHRASE);
 //
-//        // Create grammar-based search for digit recognition
-//        File digitsGrammar = new File(assetsDir, "digits.gram");
-//        recognizer.addGrammarSearch(DIGITS_SEARCH, digitsGrammar);
+        // Create grammar-based search for selection between demos
+        File commandGrammar = new File(assetsDir, "commands.gram");
+        recognizer.addGrammarSearch(COMMAND_SEARCH, commandGrammar);
+
 //
-//        // Create language model search
-//        File languageModel = new File(assetsDir, "weather.dmp");
-//        recognizer.addNgramSearch(FORECAST_SEARCH, languageModel);
-//
+        // Create language model search
+//        File languageModel = new File(assetsDir, "en-us.lm.bin");
+//        recognizer.addNgramSearch(COMMAND_SEARCH, languageModel);
+
 //        // Phonetic search
 //        File phoneticModel = new File(assetsDir, "en-phone.dmp");
 //        recognizer.addAllphoneSearch(PHONE_SEARCH, phoneticModel);
@@ -320,6 +262,6 @@ public class PocketSphinxActivity extends Activity implements
 
     @Override
     public void onTimeout() {
-        switchSearch(KWS_SEARCH);
+        switchSearch(COMMAND_SEARCH);
     }
 }
