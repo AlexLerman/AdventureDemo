@@ -3,10 +3,15 @@
 grammar commands;
 
 public <sentence> =
+  look |
+  look around |
   <verb> <filler>* <noun> |
-  combine <filler>* <noun> <filler>* <noun>;
+  (combine | use) <filler>* <noun> <filler>* <noun> |
+  go <filler>* <direction>;
 
-<verb> = pick up | play | drop | go | look at | inspect | examine | open | close ;
-<filler> = uh | a | with | to | the ;
-<noun> = knife | pear | painting | koala | jackhammer | plant | wall | nail | robot | existential angst | charlie | caroline ;
-
+<verb> = pick up | take | play | drop | look at | inspect | examine | open | close ;
+<filler> = uh | um | a | with | to | the | and ;
+<noun> = knife | pear | painting | koala | jackhammer |
+plant | wall | nail | robot | room | plant | pot | metal | dagger| table |
+ note | letter | paper;
+<direction> = north | south | east | west | northeast | northwest | southeast | southwest ;

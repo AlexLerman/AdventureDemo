@@ -36,8 +36,14 @@ import static edu.cmu.pocketsphinx.SpeechRecognizerSetup.defaultSetup;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Timer;
+import java.util.TimerTask;
+
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -48,12 +54,14 @@ import android.speech.RecognizerIntent;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.os.Handler;
 import edu.cmu.pocketsphinx.Assets;
 import edu.cmu.pocketsphinx.Hypothesis;
 import edu.cmu.pocketsphinx.RecognitionListener;
 import edu.cmu.pocketsphinx.SpeechRecognizer;
 import android.media.MediaPlayer;
 
+@SuppressWarnings("unused")
 
 public class PocketSphinxActivity extends Activity implements
         RecognitionListener {
@@ -74,6 +82,7 @@ public class PocketSphinxActivity extends Activity implements
 
     private SpeechRecognizer recognizer;
     private HashMap<String, Integer> captions;
+    private Handler h = new Handler();
 
 
     @Override
@@ -112,6 +121,8 @@ public class PocketSphinxActivity extends Activity implements
                             .setText("Failed to init recognizer " + result);
                 } else {
                     switchSearch(COMMAND_SEARCH);
+                    playGame();
+
                 }
             }
         }.execute();
@@ -150,27 +161,75 @@ public class PocketSphinxActivity extends Activity implements
      */
     @Override
     public void onResult(Hypothesis hypothesis) {
-        System.out.println("Result: " + hypothesis.getHypstr());
-        ((TextView) findViewById(R.id.result_text)).setText("");
+
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
-
+            System.out.println("Result: " + text);
+            ((TextView) findViewById(R.id.result_text)).setText("");
 //        ((TextView) findViewById(R.id.result_text)).setText(text);
             parseText(text);
         }
     }
+    private String fillers = "uh|um|a|with|to|the|and";
+    private ArrayList<String> filler = new ArrayList<>(Arrays.asList(fillers.split("|")));
+
+    private class Scene {
+        private String intro;
+        private int introAudio;
+        private int atmosphere;
+        private String description = "On the floor in front of you the fallen oil painting lays face-down. On the wall there is a faded square where it used to hang with a bent nail hanging askew from its hole. A small, but ornate side table holds up a ceramic pot filled with the remains of a plant that rotted long, long ago.\n";
+        private int descriptionAudio;
+
+        private List<GameObjects> objects;
+        public String getDescription(){
+            return description;
+        }
+
+        public Scene(String intro, String description, int atmosphere){
+
+        }
+    }
+
+    private class Inventory {
+        private List<GameObjects> objects;
+    }
+
+
+    private class GameObjects {
+        private String name;
+        private int nameAudio;
+        private String description;
+        private int descriptionAudio;
+        private Boolean obtainable;
+        private Boolean seen = false;
+        private List<HashMap> actions;
+    }
+
+    private Scene activeScene = new Scene();
 
     protected void parseText(String text){
         System.out.println("Parsing text");
-        makeText(getApplicationContext(),
-                getString(R.string.command_caption),
-                Toast.LENGTH_LONG).show();
-        String[] separated = text.split(" ");
-        if (separated[0].equalsIgnoreCase("play")){
-            if (separated[1].equalsIgnoreCase("charlie")) {
+//        makeText(getApplicationContext(),
+//                getString(R.string.command_caption),
+//                Toast.LENGTH_LONG).show();
+        List<String> separated = Arrays.asList( text.split(" "));
+        ArrayList<String> commands = new ArrayList<>(separated);
+        commands.removeAll(filler);
+        if (commands.get(0).equalsIgnoreCase("look")){
+            if(commands.size() > 1){
+                if (commands.get(1).equalsIgnoreCase("around")){
+                    setCaptions(activeScene.getDescription());
+                }
+
+            }else{
+                setCaptions(activeScene.getDescription());
+            }
+
+        }else if (commands.get(0).equalsIgnoreCase("play")){
+            if (commands.get(1).equalsIgnoreCase("charlie")) {
                 MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.charlie);
                 mediaPlayer.start();
-            }else if(separated[1].equalsIgnoreCase("caroline")){
+            }else if(commands.get(1).equalsIgnoreCase("caroline")){
                 MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.caroline);
                 mediaPlayer.start();
             }else{
@@ -182,6 +241,33 @@ public class PocketSphinxActivity extends Activity implements
             ((TextView) findViewById(R.id.caption_text))
                     .setText(text);
         }
+        recognizer.startListening(COMMAND_SEARCH);
+
+    }
+
+    private void playGame(){
+
+        setCaptions("Your eyes blink open as the world around you comes into focus. You are in a small, four cornered room. You don’t remember how you got here. Come to think of it, you don’t know who you are at all. As you reach back into your mind to uncover the missing details…");
+        h.postDelayed(runnableSetCaptions("(A loud thump)"), 10000);
+        h.postDelayed(runnableSetCaptions("An oil painting has fallen off the wall in front of you. For the first time you notice the space. You snap out of your reverie. The room is sparsely decorated with an antique style reminiscent of a time you can’t quite place.\n"), 11000);
+        recognizer.startListening(COMMAND_SEARCH);
+
+    }
+
+    private Runnable runnableSetCaptions(final String caption){
+
+        Runnable aRunnable = new Runnable(){
+            public void run(){
+                setCaptions(caption);
+            }
+        };
+
+        return aRunnable;
+
+    }
+
+    private void setCaptions(String caption){
+        ((TextView) findViewById(R.id.caption_text)).setText(caption);
     }
 
 
@@ -214,6 +300,7 @@ public class PocketSphinxActivity extends Activity implements
         ((TextView) findViewById(R.id.caption_text)).setText(caption);
     }
 
+
     private void setupRecognizer(File assetsDir) throws IOException {
         // The recognizer can be configured to perform multiple searches
         // of different kind and switch between them
@@ -226,7 +313,7 @@ public class PocketSphinxActivity extends Activity implements
 //                .setRawLogDir(assetsDir)
                 
                 // Threshold to tune for keyphrase to balance between false alarms and misses
-                .setKeywordThreshold(1e-5f)
+                .setKeywordThreshold(1e-1f)
                 
                 // Use context-independent phonetic search, context-dependent is too slow for mobile
                 .setBoolean("-allphone_ci", true)
