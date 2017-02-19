@@ -11,7 +11,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:textSize="20dp"
+        android:textColor="@color/white"
         android:typeface="sans" />
 
     <LinearLayout
@@ -37,7 +38,7 @@
             android:layout_width="match_parent"
             android:layout_height="60dp"
             android:inputType="text"
-            android:text="Command"
+            android:hint="Command"
             android:ems="10"
             android:id="@+id/inputText" />
     </LinearLayout>

@@ -9,7 +9,7 @@ public <sentence> =
   (combine | use) <filler>* <noun> <filler>* <noun> |
   go <filler>* <direction>;
 
-<verb> = pick up | take | play | drop | look at | inspect | examine | open | close ;
+<verb> = pick up | take | play | drop | look at | inspect | examine | open | close | use | enter | eat ;
 <filler> = uh | um | a | with | to | the | and ;
 <noun> = knife | pear | painting | koala | jackhammer |
 plant | wall | nail | robot | room | plant | pot | metal | dagger| table |
