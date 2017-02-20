@@ -323,16 +323,18 @@ public class MainActivity extends Activity implements
 //    }
     private void executeConsequences(ArrayList<Consequence> consequenceList){
         //TODO: wait properly for audio to finish before executing next consequence
-        System.out.println("Length of consequences" + consequenceList.size());
         if (consequenceList == null){
             playAudio(R.raw.ag_022);
-        }
-        for (Consequence con : consequenceList) {
-            while (mP.isPlaying()) {
-                //do nothing. this is probably the wrong way to do this....
+        }else{
+            System.out.println("Length of consequences" + consequenceList.size());
+            for (Consequence con : consequenceList) {
+                while (mP.isPlaying()) {
+                    //do nothing. this is probably the wrong way to do this....
+                }
+                executeConsequence(con);
             }
-            executeConsequence(con);
         }
+
     }
 
 
@@ -691,6 +693,10 @@ public class MainActivity extends Activity implements
                 executeConsequences(com.getItem1().getActions().get("take"));
                 break;
             case "open":
+                System.out.println(com.getItem1().getName());
+                System.out.println(com.getItem1().getActions().getClass());
+                System.out.println(com.getItem1().getActions().get("open"));
+
                 executeConsequences(com.getItem1().getActions().get("open"));
                 break;
             case "close":
