@@ -4,6 +4,7 @@
     android:layout_height="fill_parent"
     android:padding="16dp"
     android:background="@drawable/bg_gradient"
+    android:keepScreenOn="true"
     android:orientation="vertical">
 
     <TextView
