@@ -35,11 +35,17 @@ import static edu.cmu.pocketsphinx.SpeechRecognizerSetup.defaultSetup;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Array;
+import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.app.Activity;
 import android.net.Uri;
@@ -223,14 +229,203 @@ public class MainActivity extends Activity implements
         AppIndex.AppIndexApi.end(client, getIndexApiAction());
         client.disconnect();
     }
+    //Action consequences:
+    // Change scene (go) |      [[changeScene, sceneName]]
+    // add to inventory, subtract from scene (take)
+    // add/subtract [items+] to/from scene (open, look at, use, combine, pick up)  | [[add, [items]], [subtract, [items]]]
+    // add/subtract [items+] to/from inventory (open, look at, use, combine)
+    // change permissions (lock, unlock) | [[unlock/lock, item, consequenceAudio/Text]]
+    // make visible [items+]  (look around, pick up plant) | [[reveal, [items], consequenceAudio/Text]]
+    //
+    // e.g [[add, [pot]], [reveal, [knife, matchstick], consequenceAudio]]
+    // [{add: {items: [pots], consequenceAudio: R.raw.ag_001}}, {reveal: {items: [knife, matchstick], consequenceAudio: R.raw.ag_002 }]
+
+
+    private void addToScene(ArrayList<String> items){
+        for( String object: items){
+            activeScene.addObject(findGameObject(allGameObjects, object));
+        }
+    }
+
+    private void subtractFromScene(ArrayList<String> items){
+        for( String object: items){
+            activeScene.removeObject(findSceneObject(activeScene, object));
+        }
+    }
+
+    private void takeFromScene(ArrayList<String> items){
+        for( String object: items){
+            Item item  = findSceneObject(activeScene, object);
+            System.out.println(item.getName());
+            activeScene.removeObject(item);
+            System.out.println(item.getName());
+            System.out.println(inventory);
+            inventory.add(item);
+            System.out.println(inventory);
+            System.out.println(item.getName());
+        }
+    }
+
+    private void replaceInScene(ArrayList<String> items){
+        System.out.println("Replacing...");
+        System.out.println("Replacing: " + findSceneObject(activeScene, items.get(0)).getName());
+        System.out.println(" with " + findGameObject(allGameObjects, items.get(1)).getName());
+        activeScene.replaceObject(findSceneObject(activeScene, items.get(0)), findGameObject(allGameObjects, items.get(1)));
+    }
+
+    private void addInventory(ArrayList<String> items){
+        for( String object: items){
+            inventory.add(findSceneObject(activeScene, object));
+        }
+    }
+
+
+    private void subtractInventory(ArrayList<String> items){
+        for( String object: items){
+            inventory.remove(findSceneObject(activeScene, object));
+        }
+    }
+    private void replaceInventory(ArrayList<String> items){
+        Item oldItem = findSceneObject(activeScene, items.get(0));
+        Item newItem = findSceneObject(activeScene, items.get(1));
+        int index = inventory.indexOf(oldItem);
+        inventory.remove(index);
+        inventory.add(index, newItem);
+    }
+
+//    private void reveal(ArrayList<String> items){
+//        for( String object: items){
+//            findSceneObject(activeScene, object).reveal();
+//        }
+//    }
+
+//    private void hide(ArrayList<String> items){
+//        for( String object: items){
+//            findSceneObject(activeScene, object).hide();
+//        }
+//    }
+
+//    MediaPlayer consequenceMedia;
+//
+//    private void playConsequnceAudio(int audio) {
+//        consequenceMedia = MediaPlayer.create(this, audio);
+//        consequenceMedia.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+//            @Override
+//            public void onCompletion(MediaPlayer mp) {
+//                try {
+//                    executeConsequence();
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//        });
+//        mP.start();
+//    }
+    private void executeConsequences(ArrayList<Consequence> consequenceList){
+        //TODO: wait properly for audio to finish before executing next consequence
+        System.out.println("Length of consequences" + consequenceList.size());
+        if (consequenceList == null){
+            playAudio(R.raw.ag_022);
+        }
+        for (Consequence con : consequenceList) {
+            while (mP.isPlaying()) {
+                //do nothing. this is probably the wrong way to do this....
+            }
+            executeConsequence(con);
+        }
+    }
+
+
+
+    private void executeConsequence(Consequence con) {
+        String consequence = con.getResult();
+        System.out.println("Consequence: " + consequence);
+        if (con.getTimedText() != null) {
+            readTimedTextArray(con.getTimedText());
+        }
+        if (con.getAudio() != -1) {
+            playAudio(con.getAudio());
+        }
+        if (consequence != null) {
+
+            switch (consequence) {
+                case "reveal":
+                    System.out.println("Reveal: " + con.getItems());
+
+                    addToScene(con.getItems());
+                    //changes item's seen field to true
+                    break;
+                case "hide":
+                    System.out.println("Hide: " + con.getItems());
+
+                    subtractFromScene(con.getItems());
+                    //changes item's seen field to false
+                    break;
+                case "addToScene":
+                    System.out.println("AddToScene: " + con.getItems());
+                    addToScene(con.getItems());
+                    break;
+                case "subtractFromScene":
+                    System.out.println("subtractFromScene: " + con.getItems());
+                    subtractFromScene(con.getItems());
+                    break;
+                case "replaceInScene":
+                    System.out.println("Replace: " + con.getItems());
+                    replaceInScene(con.getItems());
+                    //replaces item with new item
+                    break;
+                case "addInventory":
+                    addInventory(con.getItems());
+                    break;
+                case "subtractInventory":
+                    subtractInventory(con.getItems());
+                    break;
+                case "replaceInventory":
+                    replaceInventory(con.getItems());
+                    //replaces item with new item
+                    break;
+                case "takeFromScene":
+                    takeFromScene(con.getItems());
+                case "unlock":
+                    //                unlock(con.getItems());
+                    break;
+                case "lock":
+                    //                lock(con.getItems());
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+//
+//    private JSONArray generateConsequence(String consequence, ArrayList<String> items, int audio, String text){
+//        try {
+//            return new JSONArray("[{\""+ consequence+ "\": {\"items\": , \"audio\": " + Integer.toString(R.raw.ag_009) + " }}]");
+//        }catch(JSONException e){
+//            System.out.println(e);
+//            return null;
+//        }
+//    }
+
+
+    private void readTimedTextArray(ArrayList<TimedText> array){
+        setCaptions(array.get(0).getText());
+        int delay = 0;
+        for (int i = 1; i < array.size(); i++){
+            delay +=  array.get(i-1).getTime();
+            h.postDelayed(runnableSetCaptions(array.get(i).getText()), delay);
+        }
+    }
+
 
 
     private class Scene {
-        private String intro;
-        private int introAudio;
-        private int atmosphere;
-        private String description;
-        private int descriptionAudio;
+        private String intro = null;
+        private int introAudio = -1;
+        private int atmosphere = -1;
+        private String description = null;
+        private int descriptionAudio = -1;
 
         private ArrayList<Item> objects;
 
@@ -260,10 +455,25 @@ public class MainActivity extends Activity implements
         public ArrayList<Item> getObjects() {
             return objects;
         }
+
+        public void addObject(Item item){
+            objects.add(item);
+        }
+
+        public void removeObject(Item item){
+            objects.remove(item);
+        }
+
+        public void replaceObject(Item oldItem, Item newItem){
+            int index = objects.indexOf(oldItem);
+            objects.remove(index);
+            objects.add(index, newItem);
+        }
     }
 
 
     private ArrayList<Item> inventory;
+    private ArrayList<Item> allGameObjects;
 
 
     private class Item {
@@ -273,21 +483,26 @@ public class MainActivity extends Activity implements
         private String description;
         private int descriptionAudio;
         private Boolean obtainable;
-        private Boolean seen = false;
-        private List<HashMap> actions;
+        private Boolean visible = false;
+        private HashMap<String, ArrayList<Consequence>> actions;
 
-        public Item(String nameP, ArrayList<String> aliasesP, int nameAudioP, String descriptionP, int descriptionAudioP, Boolean obtainableP, Boolean seenP) {
+        public Item(String nameP, ArrayList<String> aliasesP, int nameAudioP, String descriptionP, int descriptionAudioP, Boolean obtainableP, Boolean seenP, HashMap<String, ArrayList<Consequence>> actionsP) {
             name = nameP;
             aliases = aliasesP;
             nameAudio = nameAudioP;
             description = descriptionP;
             descriptionAudio = descriptionAudioP;
             obtainable = obtainableP;
-            seen = seenP;
+            visible = seenP;
+            actions = actionsP;
         }
 
         public ArrayList<String> getAliases() {
             return aliases;
+        }
+
+        public String getName() {
+            return name;
         }
 
         public int getDescriptionAudio() {
@@ -297,41 +512,53 @@ public class MainActivity extends Activity implements
         public String getDescription() {
             return description;
         }
+
+        public HashMap<String, ArrayList<Consequence>> getActions() {
+            return actions;
+        }
+
+        public Boolean getObtainable() {
+            return obtainable;
+        }
+
+        public Boolean isVisible() {
+            return visible;
+        }
+
+        public void reveal(){
+            visible = true;
+        }
+
+        public void hide(){
+            visible = false;
+        }
     }
 
     private Scene activeScene;
 
-    private void generateScene() {
-        ArrayList<String> nailAliases = new ArrayList<>();
-        nailAliases.add("nail");
-
-        Item nail = new Item("nail", nailAliases, 0,
-                "The nail is rusty and bent. Strange, though, that it gave in to gravity at the same time you appeared.\n", R.raw.ag_005, true, true);
-
-        ArrayList<Item> sceneObjects = new ArrayList<>();
-        sceneObjects.add(nail);
-
-        activeScene = new Scene(0, "", R.raw.ag_001, sceneDescription, R.raw.ag_002, sceneObjects);
-    }
-
-    //Action consequences:
-    // Change scene (go) |      [changeScene, sceneName]
-    // add to inventory, subtract from scene (take)
-    // add/subtract [items+] to/from scene (open, look at, use, combine, pick up)  | [[add, [items]] [subtract, [items]]
-    // add/subtract [items+] to/from inventory (open, look at, use, combine)
-    // change permissions (lock, unlock)
-    // make visible [items+]  (look around) |
-    //
 
     @Nullable
-    private Item findGameObject(Scene aS, String name) {
-        ArrayList<Item> sO = aS.getObjects();
-        for (int i = 0; i < sO.size(); i++) {
-            ArrayList<String> oA = sO.get(i).getAliases();
+    private Item findSceneObject(Scene aS, String name) {
+        ArrayList<Item> itemList = new ArrayList<>();
+        itemList.addAll(aS.getObjects());
+        itemList.addAll(inventory);
+        for (int i = 0; i < itemList.size(); i++) {
+            ArrayList<String> oA = itemList.get(i).getAliases();
             for (int j = 0; j < oA.size(); j++) {
                 if (name.equalsIgnoreCase(oA.get(j))) {
-                    return sO.get(i);
+                    return itemList.get(i);
                 }
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private Item findGameObject(ArrayList<Item> itemList, String name) {
+        for (int i = 0; i < itemList.size(); i++) {
+            String objName = itemList.get(i).getName();
+            if (name.equalsIgnoreCase(objName)) {
+                return itemList.get(i);
             }
         }
         return null;
@@ -357,9 +584,6 @@ public class MainActivity extends Activity implements
 //        }
 //    }
 
-    private void use(){
-
-    }
 
     private void combine(){
 
@@ -367,8 +591,8 @@ public class MainActivity extends Activity implements
 
     class Command{
         private String command;
-        private Item item1;
-        private Item item2;
+        private Item item1 = null;
+        private Item item2 = null;
 
         public Command(String commandP, Item item1P, Item item2P){
             command = commandP;
@@ -408,12 +632,12 @@ public class MainActivity extends Activity implements
             System.out.println("valid command");
             if (commands.size() == 3) {
                 if (commands.get(1).equalsIgnoreCase("at") || commands.get(1).equalsIgnoreCase("up")) {
-                    Item item = findGameObject(activeScene, commands.get(2));
+                    Item item = findSceneObject(activeScene, commands.get(2));
                     return new Command(TextUtils.join(" ", commands.subList(0, 2)), item);
                 } else {
                     if (commands.get(0).equalsIgnoreCase("use") || commands.get(0).equalsIgnoreCase("combine")) {
-                        Item item1 = findGameObject(activeScene, commands.get(1));
-                        Item item2 = findGameObject(activeScene, commands.get(2));
+                        Item item1 = findSceneObject(activeScene, commands.get(1));
+                        Item item2 = findSceneObject(activeScene, commands.get(2));
                         return new Command("combine", item1, item2);
                     }
                 }
@@ -423,7 +647,7 @@ public class MainActivity extends Activity implements
             } else if (commands.get(0).equalsIgnoreCase("look") && (commands.size() == 1 || commands.get(1).equalsIgnoreCase("around"))) {
                 return new Command("look around");
             }
-            Item item = findGameObject(activeScene, commands.get(1));
+            Item item = findSceneObject(activeScene, commands.get(1));
             return new Command(commands.get(0), item);
         }
         return new Command("invalid");
@@ -445,7 +669,14 @@ public class MainActivity extends Activity implements
         commands.removeAll(fillers);
         Command com = parseCommand(commands);
         System.out.println("Command: " + com.getCommand());
-        switch (com.getCommand()){
+        String command = com.getCommand();
+        if (com.getItem1() != null){
+            System.out.println("First item: " + com.getItem1().getName());
+        }
+        if (com.getItem2() != null){
+            System.out.println("Second Item: " +  com.getItem2().getName());
+        }
+        switch (command){
             case "look around":
                 setCaptions(activeScene.getDescription());
                 playAudio(activeScene.descriptionAudio);
@@ -453,22 +684,44 @@ public class MainActivity extends Activity implements
             case "examine":
             case "look at":
             case "inspect":
-                examine(com.getItem1());
+                executeConsequences(com.getItem1().getActions().get("inspect"));
                 break;
-//            case "pick up":
-//            case "take":
-//                break;
-//            case "open":
-//                break;
-//            case "close":
-//                break;
+            case "pick up":
+            case "take":
+                executeConsequences(com.getItem1().getActions().get("take"));
+                break;
+            case "open":
+                executeConsequences(com.getItem1().getActions().get("open"));
+                break;
+            case "close":
+                executeConsequences(com.getItem1().getActions().get("close"));
+                break;
+            case "push":
+                executeConsequences(com.getItem1().getActions().get("push"));
+                break;
+            case "pull":
+                executeConsequences(com.getItem1().getActions().get("pull"));
+
+                break;
 //            case "play":
 //            case "eat":
 //            case "enter:
-//            case "use": //using one item
-//                break;
-//            case "combine": //using/combining two items
-//                break;
+            case "use": //using one item
+                executeConsequences(com.getItem1().getActions().get("use"));
+                break;
+            case "combine": //using/combining two items
+                System.out.println("Combining...");
+                ArrayList<Consequence> con = com.getItem1().getActions().get("combine " + com.getItem2().getName());
+                System.out.print("Consequence: ");
+                System.out.println(con);
+
+                if (con == null){
+                    con = com.getItem2().getActions().get("combine " + com.getItem1().getName());
+                    System.out.print("Other consequence: ");
+                    System.out.println(con);
+                    executeConsequences(con);
+                }
+                break;
             default:
                 setCaptions("Invalid command");
                 break;
@@ -477,6 +730,30 @@ public class MainActivity extends Activity implements
     }
 
     MediaPlayer mP;
+    MediaPlayer mPlayer;
+
+    private void playAudioArray(final ArrayList<Integer> queue){
+        mPlayer = MediaPlayer.create(this, queue.get(0));
+        mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener()
+        {
+            @Override
+            public void onCompletion(MediaPlayer mp)
+            {
+                queue.remove(0);
+                if (queue.size() == 0){
+                    try {
+                        recognizer.startListening(COMMAND_SEARCH);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }else{
+                    playAudioArray(queue);
+                }
+            }
+        });
+        mPlayer.start();
+    }
+
 
     private void playAudio(int audio) {
         mP = MediaPlayer.create(this, audio);
@@ -515,18 +792,7 @@ public class MainActivity extends Activity implements
                 return false;
             }
         });
-        mP = MediaPlayer.create(this, activeScene.getIntroAudio());
-        mP.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override
-            public void onCompletion(MediaPlayer mp) {
-                try {
-                    recognizer.startListening(COMMAND_SEARCH);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        mP.start();
+        playAudio(activeScene.getIntroAudio());
 
 //        setCaptions("Your eyes blink open as the world around you comes into focus. You are in a small, four cornered room. You don’t remember how you got here. Come to think of it, you don’t know who you are at all. As you reach back into your mind to uncover the missing details…");
 //        h.postDelayed(runnableSetCaptions("(A loud thump)"), 10000);
@@ -643,6 +909,225 @@ public class MainActivity extends Activity implements
 
     @Override
     public void onTimeout() {
-        switchSearch(COMMAND_SEARCH);
+//        switchSearch(COMMAND_SEARCH);
+    }
+
+    private ArrayList<String> toArrayList(String[] stringList){
+        return new ArrayList<>(Arrays.asList(stringList));
+    }
+
+
+    private ArrayList<Consequence> simpleResponse(int audio){
+        Consequence inspectNail = new Consequence(audio);
+        ArrayList<Consequence> nailInspectCon = new ArrayList<>();
+        nailInspectCon.add(inspectNail);
+        return nailInspectCon;
+    }
+    private void generateScene() {
+        Item fallenPainting;
+        Item painting;
+        Item cutPainting;
+        Item emptyPainting;
+        Item nail; //
+        Item table;//
+        Item plant; //
+        Item uselessPlant; //
+        Item knife; //
+        Item certificate;//
+
+        ArrayList<String> fallenPaintingAliases = new ArrayList<>();
+        fallenPaintingAliases.add("painting");
+        fallenPaintingAliases.add("fallenPainting");
+        ArrayList<String> paintingAliases = new ArrayList<>();
+        paintingAliases.add("painting");
+        ArrayList<String> cutPaintingAliases = new ArrayList<>();
+        cutPaintingAliases.add("painting");
+        cutPaintingAliases.add("cutPainting");
+        ArrayList<String> emptyPaintingAliases = new ArrayList<>();
+        emptyPaintingAliases.add("painting");
+        emptyPaintingAliases.add("emptyPainting");
+
+        ArrayList<String> nailAliases = new ArrayList<>();
+        nailAliases.add("nail");
+        ArrayList<String> tableAliases = new ArrayList<>();
+        tableAliases.add("table");
+        ArrayList<String> plantAliases = new ArrayList<>();
+        plantAliases.add("plant");
+        plantAliases.add("pot");
+        ArrayList<String> uselessPlantAliases = new ArrayList<>();
+        uselessPlantAliases.add("plant");
+        uselessPlantAliases.add("pot");
+        uselessPlantAliases.add("uselessPlant");
+        ArrayList<String> knifeAliases = new ArrayList<>();
+        knifeAliases.add("knife");
+        ArrayList<String> certificateAliases = new ArrayList<>();
+        certificateAliases.add("certificate");
+        certificateAliases.add("note");
+
+
+//      Look around | take | inspect
+        HashMap<String, ArrayList<Consequence>> nailActions = new HashMap<>();
+        ArrayList<String> stub = new ArrayList<>();
+        stub.add("nail");
+        Consequence takeNail =  new Consequence("takeFromScene", stub, R.raw.ag_006);
+        ArrayList<Consequence> nailCon = new ArrayList<>();
+        nailCon.add(takeNail);
+        Consequence inspectNail = new Consequence(R.raw.ag_005);
+        ArrayList<Consequence> nailInspectCon = new ArrayList<>();
+        nailInspectCon.add(inspectNail);
+        nailActions.put("take", nailCon);
+        nailActions.put("inspect", nailInspectCon);
+        nailActions.put("use", simpleResponse(R.raw.ag_019));
+        nail = new Item("nail", nailAliases, R.raw.inv_nail, getString(R.string.ag_005), R.raw.ag_005, true, true, nailActions);
+
+        HashMap<String, ArrayList<Consequence>> plantActions = new HashMap<>();
+        stub = new ArrayList<>();
+        stub.add("knife");
+        Consequence takePlant =  new Consequence("reveal", stub, R.raw.ag_009);
+        ArrayList<Consequence> plantCon = new ArrayList<>();
+        plantCon.add(takePlant);
+        Consequence inspectPlant = new Consequence(R.raw.ag_007);
+        ArrayList<Consequence> plantInspectCon = new ArrayList<>();
+        plantInspectCon.add(inspectPlant);
+        plantActions.put("take", plantCon);
+        plantActions.put("inspect", plantInspectCon);
+        plantActions.put("use", simpleResponse(R.raw.useforwhat));
+        plantActions.put("combine knife", simpleResponse(R.raw.use_plant_w_knife));
+        plantActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        plant = new Item("plant", plantAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, plantActions);
+
+
+        HashMap<String, ArrayList<Consequence>> uselessPlantActions = new HashMap<>();
+        uselessPlantActions.put("take", simpleResponse(R.raw.plant_pickup_postmanhandle));
+        uselessPlantActions.put("inspect", simpleResponse(R.raw.plant_examine_postmanhandle));
+        uselessPlantActions.put("use", simpleResponse(R.raw.useforwhat));
+        uselessPlantActions.put("combine knife", simpleResponse(R.raw.use_plant_w_knife));
+        uselessPlantActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        uselessPlant = new Item("uselessPlant", uselessPlantAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, uselessPlantActions);
+
+        HashMap<String, ArrayList<Consequence>> knifeActions = new HashMap<>();
+        stub = new ArrayList<>();
+        stub.add("knife");
+        Consequence takeKnife =  new Consequence("takeFromScene", stub, R.raw.ag_013);
+        ArrayList<String> replacement = new ArrayList<>();
+        replacement.add("plant");
+        replacement.add("uselessPlant");
+        Consequence replacePlant =  new Consequence("replaceInScene", replacement);
+        ArrayList<Consequence> knifeCon = new ArrayList<>();
+        knifeCon.add(replacePlant);
+        knifeCon.add(takeKnife);
+        knifeActions.put("use", simpleResponse(R.raw.useforwhat));
+        knifeActions.put("take", knifeCon);
+        knifeActions.put("inspect", simpleResponse(R.raw.ag_012));
+//        knifeActions.put("combine painting", simpleResponse(R.raw.ag_019));
+        knifeActions.put("combine certificate", simpleResponse(R.raw.ag_018));
+        knifeActions.put("combine nail", simpleResponse(R.raw.ag_014));
+        //TODO: Combine other for general "That doesn't need to be cut" kind of things
+        knife = new Item("knife", knifeAliases, R.raw.inv_nail, getString(R.string.ag_005), R.raw.ag_005, true, false, knifeActions);
+
+        HashMap<String, ArrayList<Consequence>> tableActions = new HashMap<>();
+        tableActions.put("inspect", simpleResponse(R.raw.ag_008));
+        tableActions.put("take", simpleResponse(R.raw.ag_010));
+        tableActions.put("use", simpleResponse(R.raw.ag_011));
+        tableActions.put("combine knife", simpleResponse(R.raw.ag_020));
+        tableActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        table = new Item("table", tableAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, tableActions);
+
+
+        HashMap<String, ArrayList<Consequence>> certificateActions = new HashMap<>();
+        stub = new ArrayList<>();
+        stub.add("certificate");
+        System.out.println("Stub length: "+ stub.size());
+        Consequence takeCertificate =  new Consequence("takeFromScene", stub, R.raw.ag_017);
+        replacement = new ArrayList<>();
+        replacement.add("cutPainting");
+        replacement.add("emptyPainting");
+        Consequence replaceCutPainting =  new Consequence("replaceInScene", replacement);
+        ArrayList<Consequence> certificateCon = new ArrayList<>();
+        certificateCon.add(replaceCutPainting);
+        certificateCon.add(takeCertificate);
+        certificateActions.put("inspect", certificateCon);
+        certificateActions.put("take", certificateCon);
+        certificateActions.put("use", simpleResponse(R.raw.ag_017));
+        certificateActions.put("combine knife", simpleResponse(R.raw.ag_018));
+        certificateActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        certificate = new Item("certificate", certificateAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, certificateActions);
+
+        HashMap<String, ArrayList<Consequence>> fallenPaintingActions = new HashMap<>();
+        replacement = new ArrayList<>();
+        replacement.add("fallenPainting");
+        replacement.add("painting");
+        Consequence takeFallenPainting =  new Consequence("replaceInScene", replacement, R.raw.ag_003);
+        ArrayList<Consequence> fallenPaintingCon = new ArrayList<>();
+        fallenPaintingCon.add(takeFallenPainting);
+        fallenPaintingActions.put("inspect", fallenPaintingCon);
+        fallenPaintingActions.put("take", fallenPaintingCon);
+        fallenPaintingActions.put("use", fallenPaintingCon);
+//        certificateActions.put("combine knife", simpleResponse(R.raw.ag_018)); TODO figure out options
+        fallenPaintingActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        fallenPainting = new Item("fallenPainting", fallenPaintingAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, fallenPaintingActions);
+
+        HashMap<String, ArrayList<Consequence>> paintingActions = new HashMap<>();
+        replacement = new ArrayList<>();
+        replacement.add("painting");
+        replacement.add("cutPainting");
+        Consequence killPainting =  new Consequence("replaceInScene", replacement, R.raw.ag_015);
+        stub = new ArrayList<>();
+        stub.add("certificate");
+        Consequence revealCertificate =  new Consequence("reveal", stub);
+        ArrayList<Consequence> paintingCon = new ArrayList<>();
+        paintingCon.add(revealCertificate);
+        paintingCon.add(killPainting);
+        paintingActions.put("inspect", simpleResponse(R.raw.painting_examine_a));
+        paintingActions.put("take", simpleResponse(R.raw.ag_004));
+        paintingActions.put("use", simpleResponse(R.raw.useforwhat));
+        paintingActions.put("combine knife", paintingCon);
+        paintingActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        painting = new Item("painting", paintingAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, paintingActions);
+
+        HashMap<String, ArrayList<Consequence>> cutPaintingActions = new HashMap<>();
+        cutPaintingActions.put("inspect", simpleResponse(R.raw.ag_016));
+        cutPaintingActions.put("take", simpleResponse(R.raw.ag_004));
+        cutPaintingActions.put("use", simpleResponse(R.raw.useforwhat));
+        cutPaintingActions.put("combine knife", simpleResponse(R.raw.ag_022));
+        cutPaintingActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        cutPainting = new Item("cutPainting", cutPaintingAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, cutPaintingActions);
+
+        HashMap<String, ArrayList<Consequence>> emptyPaintingActions = new HashMap<>();
+        emptyPaintingActions.put("inspect", simpleResponse(R.raw.painting_examine_b));
+        emptyPaintingActions.put("take", simpleResponse(R.raw.ag_004));
+        emptyPaintingActions.put("use", simpleResponse(R.raw.useforwhat));
+        emptyPaintingActions.put("combine knife", simpleResponse(R.raw.ag_022));
+        emptyPaintingActions.put("combine nail", simpleResponse(R.raw.ag_019));
+        emptyPainting = new Item("emptyPainting", emptyPaintingAliases, 0, getString(R.string.ag_005), R.raw.ag_005, false, true, emptyPaintingActions);
+
+
+        //      Item(String nameP, ArrayList<String> aliasesP, int nameAudioP, String descriptionP, int descriptionAudioP, Boolean obtainableP, Boolean seenP, HashMap<String, ArrayList<Consequence>> actionsP) {
+
+        ArrayList<Item> sceneObjects = new ArrayList<>();
+        inventory =  new ArrayList<>();
+        allGameObjects =  new ArrayList<>();
+
+        sceneObjects.add(nail);
+        sceneObjects.add(plant);
+        sceneObjects.add(knife);
+        sceneObjects.add(table);
+        sceneObjects.add(fallenPainting);
+
+        allGameObjects.add(nail);
+        allGameObjects.add(plant);
+        allGameObjects.add(uselessPlant);
+        allGameObjects.add(knife);
+        allGameObjects.add(table);
+        allGameObjects.add(certificate);
+        allGameObjects.add(fallenPainting);
+        allGameObjects.add(painting);
+        allGameObjects.add(cutPainting);
+        allGameObjects.add(emptyPainting);
+
+
+
+
+        activeScene = new Scene(0, "", R.raw.ag_001, sceneDescription, R.raw.ag_002, sceneObjects);
     }
 }

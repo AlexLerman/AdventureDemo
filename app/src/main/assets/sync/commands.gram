@@ -9,9 +9,9 @@ public <sentence> =
   (combine | use) <filler>* <noun> <filler>* <noun> |
   go <filler>* <direction>;
 
-<verb> = pick up | take | play | drop | look at | inspect | examine | open | close | use | enter | eat ;
+<verb> = pick up | take | play | drop | look at | inspect | examine | open | close | use | enter | eat | push | pull;
 <filler> = uh | um | a | with | to | the | and ;
 <noun> = knife | pear | painting | koala | jackhammer |
 plant | wall | nail | robot | room | plant | pot | metal | dagger| table |
- note | letter | paper;
+ note | letter | paper | inventory;
 <direction> = north | south | east | west | northeast | northwest | southeast | southwest ;

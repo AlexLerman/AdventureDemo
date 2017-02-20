@@ -10,5 +10,29 @@
     <string name="phone_caption">To try phonetic recognition say anything.</string>
     <string name="speech_prompt">Speak</string>
     <string name="speech_not_supported">Not supported</string>
-    <string name="command_caption">When the audio stops, say a command".</string>
+    <string name="command_caption">When the audio stops, say a command.</string>
+    <string name="scene_description">On the floor in front of you the fallen oil painting lies face-down. On the wall there is a faded square where it used to hang with a bent nail hanging askew from its hole. A small, but ornate side table holds up a ceramic pot filled with the remains of a plant that rotted long, long ago.</string>
+    <string name="painting_examine_a">It is an oil painting. It depicts an unusual and gruesome scene in which a giant bunny rabbit in a torchlit cave, glares sinisterly over a boiling vat -- out from which sticks a pair of human legs.</string>
+    <string name="ag_003">You see the back of the frame. A hanging wire is attached. You flip it over to see the artist’s handiwork. It depicts an unusual and gruesome scene in which a giant bunny rabbit in a torchlit cave, glares sinisterly over a boiling vat -- out from which sticks a pair of human legs.</string>
+    <string name="ag_016">In the gap between the rabbit’s fluffy white head and neck you see handwritten letters. Hidden inside this painting is a note of some sort. </string>
+    <string name="ag_005">The nail is rusty and bent. Strange, though, that it gave in to gravity at the same time you appeared.</string>
+
+
+
 </resources>
+
+
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
+<!--<string name=""></string>-->
