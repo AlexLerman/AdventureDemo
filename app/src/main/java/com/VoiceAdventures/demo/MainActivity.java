@@ -30,8 +30,9 @@
 
 package com.VoiceAdventures.demo;
 
+import static android.speech.RecognizerIntent.*;
 import static android.widget.Toast.makeText;
-import static edu.cmu.pocketsphinx.SpeechRecognizerSetup.defaultSetup;
+//import static edu.cmu.pocketsphinx.SpeechRecognizerSetup.defaultSetup;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,18 +43,32 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.speech.RecognizerIntent;
+import android.speech.RecognitionListener;
+import android.speech.SpeechRecognizer;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.system.ErrnoException;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -61,11 +76,12 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.os.Handler;
-import edu.cmu.pocketsphinx.Assets;
-import edu.cmu.pocketsphinx.Hypothesis;
-import edu.cmu.pocketsphinx.RecognitionListener;
-import edu.cmu.pocketsphinx.SpeechRecognizer;
+//import edu.cmu.pocketsphinx.Assets;
+//import edu.cmu.pocketsphinx.Hypothesis;
+//import edu.cmu.pocketsphinx.RecognitionListener;
+//import edu.cmu.pocketsphinx.SpeechRecognizer;
 import android.media.MediaPlayer;
+import android.widget.Toast;
 
 import com.google.android.gms.appindexing.Action;
 import com.google.android.gms.appindexing.AppIndex;
@@ -76,11 +92,11 @@ import org.jetbrains.annotations.Nullable;
 
 @SuppressWarnings("unused")
 
-public class MainActivity extends Activity implements
-        RecognitionListener {
+public class MainActivity extends Activity{
 
     private final int REQ_CODE_SPEECH_INPUT = 100;
-
+    private SpeechRecognizer sr;
+    private static final String TAG = "recognizer";
     /* Named searches allow to quickly reconfigure the decoder */
     private static final String KWS_SEARCH = "wakeup";
     private static final String FORECAST_SEARCH = "forecast";
@@ -93,7 +109,6 @@ public class MainActivity extends Activity implements
     /* Keyword we are looking for to activate menu */
     private static final String KEYPHRASE = "okay";
 
-    private SpeechRecognizer recognizer;
     private HashMap<String, Integer> captions;
     private Handler h = new Handler();
     /**
@@ -106,6 +121,7 @@ public class MainActivity extends Activity implements
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
+        getPermissions();
 //        inputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         // Prepare the data for UI
         captions = new HashMap<String, Integer>();
@@ -115,48 +131,50 @@ public class MainActivity extends Activity implements
         setContentView(R.layout.main);
         ((TextView) findViewById(R.id.caption_text))
                 .setText("Preparing the recognizer");
-
+        sr = SpeechRecognizer.createSpeechRecognizer(this);
+        sr.setRecognitionListener(new listener());
+        playGame();
 
         // Recognizer initialization is a time-consuming and it involves IO,
         // so we execute it in async task
 
-        new AsyncTask<Void, Void, Exception>() {
-            @Override
-            protected Exception doInBackground(Void... params) {
-                try {
-                    Assets assets = new Assets(MainActivity.this);
-                    File assetDir = assets.syncAssets();
-                    setupRecognizer(assetDir);
-                } catch (IOException e) {
-                    return e;
-                }
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Exception result) {
-                if (result != null) {
-                    ((TextView) findViewById(R.id.caption_text))
-                            .setText("Failed to init recognizer " + result);
-                } else {
-                    switchSearch(COMMAND_SEARCH);
-                    playGame();
-
-                }
-            }
-        }.execute();
+//        new AsyncTask<Void, Void, Exception>() {
+//            @Override
+//            protected Exception doInBackground(Void... params) {
+//                try {
+//                    Assets assets = new Assets(MainActivity.this);
+//                    File assetDir = assets.syncAssets();
+//                    setupRecognizer(assetDir);
+//                } catch (IOException e) {
+//                    return e;
+//                }
+//                return null;
+//            }
+//
+//            @Override
+//            protected void onPostExecute(Exception result) {
+//                if (result != null) {
+//                    ((TextView) findViewById(R.id.caption_text))
+//                            .setText("Failed to init recognizer " + result);
+//                } else {
+//                    switchSearch(COMMAND_SEARCH);
+//                    playGame();
+//
+//                }
+//            }
+//        }.execute();
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
     }
 
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        recognizer.cancel();
-        recognizer.shutdown();
-    }
+//    @Override
+//    public void onDestroy() {
+//        super.onDestroy();
+//        recognizer.cancel();
+//        recognizer.shutdown();
+//    }
 
     /**
      * In partial result we get quick updates about current hypothesis. In
@@ -165,34 +183,34 @@ public class MainActivity extends Activity implements
      */
     private boolean humanIsTalking;
 
-    @Override
-    public void onPartialResult(Hypothesis hypothesis) {
-        if (hypothesis == null)
-            return;
-        humanIsTalking = true;
-        String text = hypothesis.getHypstr();
-        ((TextView) findViewById(R.id.result_text)).setText(text);
-
-//        if (text.equals(KEYPHRASE)) {
-//            recognizer.stop();
-//            ((TextView) findViewById(R.id.result_text)).setText(text);
-//}
-    }
+//    @Override
+//    public void onPartialResult(Hypothesis hypothesis) {
+//        if (hypothesis == null)
+//            return;
+//        humanIsTalking = true;
+//        String text = hypothesis.getHypstr();
+//        ((TextView) findViewById(R.id.result_text)).setText(text);
+//
+////        if (text.equals(KEYPHRASE)) {
+////            recognizer.stop();
+////            ((TextView) findViewById(R.id.result_text)).setText(text);
+////}
+//    }
 
     /**
      * This callback is called when we stop the recognizer.
      */
-    @Override
-    public void onResult(Hypothesis hypothesis) {
-
-        if (hypothesis != null) {
-            String text = hypothesis.getHypstr();
-            System.out.println("Result: " + text);
-            ((TextView) findViewById(R.id.result_text)).setText("");
-//        ((TextView) findViewById(R.id.result_text)).setText(text);
-            parseText(text);
-        }
-    }
+//    @Override
+//    public void onResult(Hypothesis hypothesis) {
+//
+//        if (hypothesis != null) {
+//            String text = hypothesis.getHypstr();
+//            System.out.println("Result: " + text);
+//            ((TextView) findViewById(R.id.result_text)).setText("");
+////        ((TextView) findViewById(R.id.result_text)).setText(text);
+//            parseText(text);
+//        }
+//    }
 
     private String fillerString = "uh,um,a,with,to,the,and";
     private ArrayList<String> fillers = new ArrayList<>(Arrays.asList(fillerString.split(",")));
@@ -690,7 +708,7 @@ public class MainActivity extends Activity implements
                     }
                 }
                 return new Command("invalid");
-            } else if (commands.size() > 3) {
+            } else if (commands.size() > 3 || commands.size() < 2) {
                 return new Command("invalid");
             } else if (commands.get(0).equalsIgnoreCase("look") && (commands.size() == 1 || commands.get(1).equalsIgnoreCase("around") || commands.get(1).equalsIgnoreCase("ahead"))) {
                 return new Command("look around");
@@ -815,7 +833,8 @@ public class MainActivity extends Activity implements
                 if (queue.size() == 0){
                     try{
                         if(!keyboardOpen){
-                            recognizer.startListening(COMMAND_SEARCH);
+                            launchRecognizer();
+//                            recognizer.startListening(COMMAND_SEARCH);
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -837,7 +856,8 @@ public class MainActivity extends Activity implements
             public void onCompletion(MediaPlayer mp) {
                 try {
                     if(!keyboardOpen){
-                        recognizer.startListening(COMMAND_SEARCH);
+                        launchRecognizer();
+//                        recognizer.startListening(COMMAND_SEARCH);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -852,14 +872,14 @@ public class MainActivity extends Activity implements
     private View.OnClickListener editTextListener = new View.OnClickListener() {
         public void onClick(View v) {
             System.out.println("Click Listener Called");
-            if (recognizer != null){
-                recognizer.stop();
+            if (sr != null){
+                sr.stopListening();
             }
             keyboardOpen = true;
         }
     };
     private void playGame() {
-        recognizer.stop();
+        sr.stopListening();
         final EditText edittext = (EditText) findViewById(R.id.inputText);
         generateScene();
 
@@ -870,8 +890,8 @@ public class MainActivity extends Activity implements
                     if (mP.isPlaying()){
                         mP.stop();
                     }
-                    if (recognizer != null){
-                        recognizer.stop();
+                    if (sr != null){
+                        sr.stopListening();
                     }
                     keyboardOpen = false;
                     parseText(edittext.getText().toString());
@@ -930,54 +950,54 @@ public class MainActivity extends Activity implements
     }
 
 
-    @Override
-    public void onBeginningOfSpeech() {
-    }
+//    @Override
+//    public void onBeginningOfSpeech() {
+//    }
 
     /**
      * We stop recognizer here to get a final result
      */
-    @Override
-    public void onEndOfSpeech() {
-        if (humanIsTalking) {
-            recognizer.stop();
-            humanIsTalking = false;
-        }
-    }
+//    @Override
+//    public void onEndOfSpeech() {
+//        if (humanIsTalking) {
+//            recognizer.stop();
+//            humanIsTalking = false;
+//        }
+//    }
 
-    private void switchSearch(String searchName) {
-        recognizer.stop();
+//    private void switchSearch(String searchName) {
+//        recognizer.stop();
+//
+//        // If we are not spotting, start listening with timeout (10000 ms or 10 seconds).
+//        if (searchName.equals(COMMAND_SEARCH))
+//            recognizer.startListening(searchName);
+//        else
+//            recognizer.startListening(searchName, 10000);
+//
+//        String caption = getResources().getString(captions.get(searchName));
+//        ((TextView) findViewById(R.id.caption_text)).setText(caption);
+//    }
 
-        // If we are not spotting, start listening with timeout (10000 ms or 10 seconds).
-        if (searchName.equals(COMMAND_SEARCH))
-            recognizer.startListening(searchName);
-        else
-            recognizer.startListening(searchName, 10000);
 
-        String caption = getResources().getString(captions.get(searchName));
-        ((TextView) findViewById(R.id.caption_text)).setText(caption);
-    }
-
-
-    private void setupRecognizer(File assetsDir) throws IOException {
-        // The recognizer can be configured to perform multiple searches
-        // of different kind and switch between them
-
-        recognizer = defaultSetup()
-                .setAcousticModel(new File(assetsDir, "en-us-ptm"))
-                .setDictionary(new File(assetsDir, "cmudict-en-us.dict"))
-
-//                // To disable logging of raw audio comment out this call (takes a lot of space on the device)
-//                .setRawLogDir(assetsDir)
-
-                // Threshold to tune for keyphrase to balance between false alarms and misses
-                .setKeywordThreshold(1e-1f)
-
-                // Use context-independent phonetic search, context-dependent is too slow for mobile
-                .setBoolean("-allphone_ci", true)
-
-                .getRecognizer();
-        recognizer.addListener(this);
+//    private void setupRecognizer(File assetsDir) throws IOException {
+//        // The recognizer can be configured to perform multiple searches
+//        // of different kind and switch between them
+//
+//        recognizer = defaultSetup()
+//                .setAcousticModel(new File(assetsDir, "en-us-ptm"))
+//                .setDictionary(new File(assetsDir, "cmudict-en-us.dict"))
+//
+////                // To disable logging of raw audio comment out this call (takes a lot of space on the device)
+////                .setRawLogDir(assetsDir)
+//
+//                // Threshold to tune for keyphrase to balance between false alarms and misses
+//                .setKeywordThreshold(1e-1f)
+//
+//                // Use context-independent phonetic search, context-dependent is too slow for mobile
+//                .setBoolean("-allphone_ci", true)
+//
+//                .getRecognizer();
+//        recognizer.addListener(this);
 
         /** In your application you might not need to add all those searches.
          * They are added here for demonstration. You can leave just one.
@@ -986,29 +1006,29 @@ public class MainActivity extends Activity implements
 //        // Create keyword-activation search.
 //        recognizer.addKeyphraseSearch(COMMAND_SEARCH, KEYPHRASE);
 //
-        // Create grammar-based search for selection between demos
-        File commandGrammar = new File(assetsDir, "commands.gram");
-        recognizer.addGrammarSearch(COMMAND_SEARCH, commandGrammar);
-
+//        // Create grammar-based search for selection between demos
+//        File commandGrammar = new File(assetsDir, "commands.gram");
+//        recognizer.addGrammarSearch(COMMAND_SEARCH, commandGrammar);
 //
-        // Create language model search
-//        File languageModel = new File(assetsDir, "en-us.lm.bin");
-//        recognizer.addNgramSearch(COMMAND_SEARCH, languageModel);
+////
+//        // Create language model search
+////        File languageModel = new File(assetsDir, "en-us.lm.bin");
+////        recognizer.addNgramSearch(COMMAND_SEARCH, languageModel);
+//
+////        // Phonetic search
+////        File phoneticModel = new File(assetsDir, "en-phone.dmp");
+////        recognizer.addAllphoneSearch(PHONE_SEARCH, phoneticModel);
+//    }
 
-//        // Phonetic search
-//        File phoneticModel = new File(assetsDir, "en-phone.dmp");
-//        recognizer.addAllphoneSearch(PHONE_SEARCH, phoneticModel);
-    }
-
-    @Override
-    public void onError(Exception error) {
-        ((TextView) findViewById(R.id.caption_text)).setText(error.getMessage());
-    }
-
-    @Override
-    public void onTimeout() {
-//        switchSearch(COMMAND_SEARCH);
-    }
+//    @Override
+//    public void onError(Exception error) {
+//        ((TextView) findViewById(R.id.caption_text)).setText(error.getMessage());
+//    }
+//
+//    @Override
+//    public void onTimeout() {
+////        switchSearch(COMMAND_SEARCH);
+//    }
 
     private ArrayList<String> toArrayList(String[] stringList){
         return new ArrayList<>(Arrays.asList(stringList));
@@ -1245,4 +1265,246 @@ public class MainActivity extends Activity implements
 
         activeScene = new Scene(0, "", R.raw.ag_001, sceneDescription, R.raw.ag_002, sceneObjects);
     }
+
+    private void launchRecognizer() {
+        promptSpeechInput();
+
+    }
+
+
+    private void restartRecognizer(){
+        sr.stopListening();
+        sr.cancel();
+        sr.destroy();
+        sr = SpeechRecognizer.createSpeechRecognizer(this);
+        sr.setRecognitionListener(new listener());
+        launchRecognizer();
+    }
+
+
+    private void mute(Boolean mute){
+        AudioManager amanager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        amanager.setStreamMute(AudioManager.STREAM_NOTIFICATION, mute);
+        amanager.setStreamMute(AudioManager.STREAM_ALARM, mute);
+        amanager.setStreamMute(AudioManager.STREAM_MUSIC, mute);
+        amanager.setStreamMute(AudioManager.STREAM_RING, mute);
+        amanager.setStreamMute(AudioManager.STREAM_SYSTEM, mute);
+    }
+
+    private long mSpeechRecognizerStartListeningTime;
+    private void promptSpeechInput() {
+        Intent intent = new Intent(ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(EXTRA_LANGUAGE_MODEL,
+                LANGUAGE_MODEL_FREE_FORM);
+//        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS);
+//        intent.putExtra(ACTION_VOICE_SEARCH_HANDS_FREE, true);
+        intent.putExtra("android.speech.extra.DICTATION_MODE", true);
+        intent.putExtra(EXTRA_PARTIAL_RESULTS, false);
+        intent.putExtra(EXTRA_LANGUAGE, Locale.getDefault());
+        try {
+            mSpeechRecognizerStartListeningTime = System.currentTimeMillis();
+            sr.startListening(intent);
+        } catch (Exception e) {
+            Toast.makeText(getApplicationContext(),
+                    getString(R.string.speech_not_supported),
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Receiving speech input
+     * */
+
+//    @Override
+//    public void onPartialResults(Bundle partialResults) {
+//        // This is supported (only?) by Google Voice Search.
+//        // The following is Google-specific.
+//        Log.i("onPartialResults: keySet: " + partialResults.keySet());
+//        String[] results = partialResults.getStringArray("com.google.android.voicesearch.UNSUPPORTED_PARTIAL_RESULTS");
+//        //double[] resultsConfidence = partialResults.getDoubleArray("com.google.android.voicesearch.UNSUPPORTED_PARTIAL_RESULTS_CONFIDENCE");
+//        if (results != null) {
+//            setPartialResult(results);
+//        }
+//    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        switch (requestCode) {
+            case REQ_CODE_SPEECH_INPUT: {
+                if (resultCode == RESULT_OK && null != data) {
+
+                    ArrayList<String> result = data
+                            .getStringArrayListExtra(EXTRA_RESULTS);
+                    makeText(getApplicationContext(), result.get(0), Toast.LENGTH_LONG).show();
+                    parseText(result.get(0));
+                }
+                break;
+            }
+
+        }
+    }
+
+    Boolean mSucess = false;
+    CountDownTimer t;
+    private  CountDownTimer timer(){
+        return new CountDownTimer(5500, 100) {
+
+            public void onTick(long millisUntilFinished) {
+//                System.out.println(millisUntilFinished);
+            }
+
+            public void onFinish() {
+
+                restartRecognizer();
+            }
+        };
+    }
+
+
+    class listener implements RecognitionListener {
+        public void onReadyForSpeech(Bundle params) {
+            Log.d(TAG, "onReadyForSpeech");
+            System.out.println("Ready");
+
+            t = timer().start();
+        }
+
+        public void onBeginningOfSpeech() {
+            Log.d(TAG, "onBeginningOfSpeech");
+            System.out.println("beginning");
+            t.cancel();
+
+        }
+
+        public void onRmsChanged(float rmsdB) {
+            Log.d(TAG, "onRmsChanged");
+        }
+
+        public void onBufferReceived(byte[] buffer) {
+            Log.d(TAG, "onBufferReceived");
+        }
+
+        public void onEndOfSpeech() {
+            Log.d(TAG, "onEndOfSpeech");
+            System.out.println("End of speech");
+        }
+
+        public void onError(int error) {
+            Log.d(TAG, "error " + error);
+            System.out.println("Error: " + error);
+            setCaptions("error " + error);
+            if (mSucess){
+                return;
+            }
+
+            if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT){
+                System.out.println("Timed " + "Out");
+                sr.cancel();
+                launchRecognizer();
+            }
+            long duration = System.currentTimeMillis() - mSpeechRecognizerStartListeningTime;
+            if (duration < 800 && error == SpeechRecognizer.ERROR_NO_MATCH) {
+                restartRecognizer();
+                return;
+            }
+            if (error == 5){
+                return;
+            }
+//            if (error == 7 || error == 6){
+//                sr.cancel();
+//                launchRecognizer();
+//            }
+        }
+
+        public void onResults(Bundle results) {
+            mSucess = true;
+            String str = new String();
+            System.out.println("Called onResults");
+            Log.d(TAG, "onResults " + results);
+            ArrayList data = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+//            for (int i = 0; i < data.size(); i++) {
+//                Log.d(TAG, "result " + data.get(i));
+//                str += data.get(i);
+//            }
+            System.out.println("Top result: " + data.get(0).toString());
+            System.out.println(str);
+
+            setCaptions(str);
+            ((TextView) findViewById(R.id.result_text)).setText(str);
+            parseText(data.get(0).toString());
+            mSucess = false;
+
+        }
+
+        public void onPartialResults(Bundle partialResults) {
+            Log.d(TAG, "onPartialResults");
+            String str = new String();
+            ArrayList data = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+            for (int i = 0; i < data.size(); i++) {
+                str += data.get(i);
+            }
+            ((TextView) findViewById(R.id.result_text)).setText(str);
+
+        }
+
+        public void onEvent(int eventType, Bundle params) {
+            Log.d(TAG, "onEvent " + eventType);
+        }
+    }
+
+    final int MY_PERMISSIONS_REQUEST_RECORD_AUDIO = 20;
+    private void getPermissions(){
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            System.out.println("PERMISSION NOT GRANTED");
+            // Should we show an explanation?
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.RECORD_AUDIO)) {
+
+                // Show an explanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+
+            } else {
+
+                // No explanation needed, we can request the permission.
+
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.RECORD_AUDIO},
+                        MY_PERMISSIONS_REQUEST_RECORD_AUDIO);
+
+                // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
+                // app-defined int constant. The callback method gets the
+                // result of the request.
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_RECORD_AUDIO: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                    // permission was granted, yay! Do the
+                    // contacts-related task you need to do.
+
+                } else {
+
+                    setCaptions("Go fuck yourself");
+                }
+                return;
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request
+        }
+    }
+
 }
