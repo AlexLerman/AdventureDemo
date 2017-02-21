@@ -47,13 +47,17 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.Context;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.KeyEvent;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.os.Handler;
@@ -253,16 +257,25 @@ public class MainActivity extends Activity implements
         }
     }
 
+    private void printItemList(ArrayList<Item> items){
+        for (Item i : items){
+            System.out.print(i.getName() + " ,");
+        }
+        System.out.println();
+    }
+
     private void takeFromScene(ArrayList<String> items){
         for( String object: items){
             Item item  = findSceneObject(activeScene, object);
-            System.out.println(item.getName());
+            System.out.println(item.getName() + item);
+//            System.out.println();
+            printItemList(activeScene.getObjects());
             activeScene.removeObject(item);
-            System.out.println(item.getName());
-            System.out.println(inventory);
+            printItemList(activeScene.getObjects());
+            printItemList(inventory);
             inventory.add(item);
-            System.out.println(inventory);
-            System.out.println(item.getName());
+            printItemList(inventory);
+            item.getActions().remove("take");
         }
     }
 
@@ -282,12 +295,12 @@ public class MainActivity extends Activity implements
 
     private void subtractInventory(ArrayList<String> items){
         for( String object: items){
-            inventory.remove(findSceneObject(activeScene, object));
+            inventory.remove(findVisibleObject(activeScene, object));
         }
     }
     private void replaceInventory(ArrayList<String> items){
-        Item oldItem = findSceneObject(activeScene, items.get(0));
-        Item newItem = findSceneObject(activeScene, items.get(1));
+        Item oldItem = findVisibleObject(activeScene, items.get(0));
+        Item newItem = findGameObject(allGameObjects, items.get(1));
         int index = inventory.indexOf(oldItem);
         inventory.remove(index);
         inventory.add(index, newItem);
@@ -553,6 +566,20 @@ public class MainActivity extends Activity implements
 
     @Nullable
     private Item findSceneObject(Scene aS, String name) {
+        ArrayList<Item> itemList = aS.getObjects();
+        for (int i = 0; i < itemList.size(); i++) {
+            ArrayList<String> oA = itemList.get(i).getAliases();
+            for (int j = 0; j < oA.size(); j++) {
+                if (name.equalsIgnoreCase(oA.get(j))) {
+                    return itemList.get(i);
+                }
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private Item findVisibleObject(Scene aS, String name) {
         ArrayList<Item> itemList = new ArrayList<>();
         itemList.addAll(aS.getObjects());
         itemList.addAll(inventory);
@@ -650,22 +677,25 @@ public class MainActivity extends Activity implements
             System.out.println("valid command");
             if (commands.size() == 3) {
                 if (commands.get(1).equalsIgnoreCase("at") || commands.get(1).equalsIgnoreCase("up")) {
-                    Item item = findSceneObject(activeScene, commands.get(2));
+                    if (commands.get(2).equalsIgnoreCase("room")){
+                        return new Command(TextUtils.join(" ", commands.subList(0, 3)));
+                    }
+                    Item item = findVisibleObject(activeScene, commands.get(2));
                     return new Command(TextUtils.join(" ", commands.subList(0, 2)), item);
                 } else {
                     if (commands.get(0).equalsIgnoreCase("use") || commands.get(0).equalsIgnoreCase("combine")) {
-                        Item item1 = findSceneObject(activeScene, commands.get(1));
-                        Item item2 = findSceneObject(activeScene, commands.get(2));
+                        Item item1 = findVisibleObject(activeScene, commands.get(1));
+                        Item item2 = findVisibleObject(activeScene, commands.get(2));
                         return new Command("combine", item1, item2);
                     }
                 }
                 return new Command("invalid");
             } else if (commands.size() > 3) {
                 return new Command("invalid");
-            } else if (commands.get(0).equalsIgnoreCase("look") && (commands.size() == 1 || commands.get(1).equalsIgnoreCase("around"))) {
+            } else if (commands.get(0).equalsIgnoreCase("look") && (commands.size() == 1 || commands.get(1).equalsIgnoreCase("around") || commands.get(1).equalsIgnoreCase("ahead"))) {
                 return new Command("look around");
             }
-            Item item = findSceneObject(activeScene, commands.get(1));
+            Item item = findVisibleObject(activeScene, commands.get(1));
             return new Command(commands.get(0), item);
         }
         return new Command("invalid");
@@ -696,6 +726,8 @@ public class MainActivity extends Activity implements
         }
         try{
             switch (command) {
+                case "look at room":
+                case "look ahead":
                 case "look around":
                     if (mP.isPlaying()){
                         mP.stop();
@@ -750,7 +782,12 @@ public class MainActivity extends Activity implements
                     }
                     break;
                 default:
-                    setCaptions("Invalid command");
+                    setCaptions("Things you could say:\n" +
+                            "\"Look around\"\n" +
+                            "\"Pick up ______\"\n" +
+                            "\"Look at ______\"\n" +
+                            "\"Use ______\"\n" +
+                            "\"Use ______with ______\"");
                     playAudio(R.raw.invalid_command);
                     break;
             }
@@ -766,6 +803,7 @@ public class MainActivity extends Activity implements
 
 
     private void playAudioArray(final ArrayList<Integer> queue){
+
         System.out.println(queue);
         mPlayer = MediaPlayer.create(this, queue.get(0));
         mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener()
@@ -775,8 +813,10 @@ public class MainActivity extends Activity implements
             {
                 queue.remove(0);
                 if (queue.size() == 0){
-                    try {
-                        recognizer.startListening(COMMAND_SEARCH);
+                    try{
+                        if(!keyboardOpen){
+                            recognizer.startListening(COMMAND_SEARCH);
+                        }
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -796,7 +836,9 @@ public class MainActivity extends Activity implements
             @Override
             public void onCompletion(MediaPlayer mp) {
                 try {
-                    recognizer.startListening(COMMAND_SEARCH);
+                    if(!keyboardOpen){
+                        recognizer.startListening(COMMAND_SEARCH);
+                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -805,6 +847,17 @@ public class MainActivity extends Activity implements
         mP.start();
     }
 
+    private Boolean keyboardOpen = false;
+
+    private View.OnClickListener editTextListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            System.out.println("Click Listener Called");
+            if (recognizer != null){
+                recognizer.stop();
+            }
+            keyboardOpen = true;
+        }
+    };
     private void playGame() {
         recognizer.stop();
         final EditText edittext = (EditText) findViewById(R.id.inputText);
@@ -820,13 +873,23 @@ public class MainActivity extends Activity implements
                     if (recognizer != null){
                         recognizer.stop();
                     }
+                    keyboardOpen = false;
                     parseText(edittext.getText().toString());
                     edittext.setText("");
+                    View view = findViewById(R.id.caption_text);
+                    InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                    imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+
                     return true;
                 }
                 return false;
             }
         });
+
+
+
+        edittext.setOnClickListener(editTextListener);
+
         playAudio(activeScene.getIntroAudio());
 
 //        setCaptions("Your eyes blink open as the world around you comes into focus. You are in a small, four cornered room. You don’t remember how you got here. Come to think of it, you don’t know who you are at all. As you reach back into your mind to uncover the missing details…");
