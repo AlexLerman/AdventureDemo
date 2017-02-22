@@ -1276,6 +1276,7 @@ public class MainActivity extends Activity{
         sr.stopListening();
         sr.cancel();
         sr.destroy();
+        System.out.println("recognizer killed");
         sr = SpeechRecognizer.createSpeechRecognizer(this);
         sr.setRecognitionListener(new listener());
         launchRecognizer();
@@ -1299,9 +1300,11 @@ public class MainActivity extends Activity{
 //        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS);
 //        intent.putExtra(ACTION_VOICE_SEARCH_HANDS_FREE, true);
         intent.putExtra("android.speech.extra.DICTATION_MODE", true);
-        intent.putExtra(EXTRA_PARTIAL_RESULTS, false);
+        intent.putExtra(EXTRA_PARTIAL_RESULTS, true);
         intent.putExtra(EXTRA_LANGUAGE, Locale.getDefault());
+//        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 100 ) ;
         try {
+            System.out.println("Start listening for speech");
             mSpeechRecognizerStartListeningTime = System.currentTimeMillis();
             sr.startListening(intent);
         } catch (Exception e) {
@@ -1349,14 +1352,17 @@ public class MainActivity extends Activity{
     Boolean mSucess = false;
     CountDownTimer t;
     private  CountDownTimer timer(){
-        return new CountDownTimer(5500, 100) {
+        if (t != null){
+            t.cancel();
+        }
+        return new CountDownTimer(5500, 5) {
 
             public void onTick(long millisUntilFinished) {
 //                System.out.println(millisUntilFinished);
             }
 
             public void onFinish() {
-
+                System.out.println("Restarted because of timer");
                 restartRecognizer();
             }
         };
@@ -1398,20 +1404,22 @@ public class MainActivity extends Activity{
             if (mSucess){
                 return;
             }
-
-            if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT){
-                System.out.println("Timed " + "Out");
-                sr.cancel();
-                launchRecognizer();
-            }
-            long duration = System.currentTimeMillis() - mSpeechRecognizerStartListeningTime;
-            if (duration < 800 && error == SpeechRecognizer.ERROR_NO_MATCH) {
-                restartRecognizer();
-                return;
-            }
             if (error == 5){
                 return;
             }
+            if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT){
+                System.out.println("Timed " + "Out");
+                restartRecognizer();
+                return;
+            }
+            long duration = System.currentTimeMillis() - mSpeechRecognizerStartListeningTime;
+            System.out.println("Duration" + duration);
+            if ((duration < 800 && error != SpeechRecognizer.ERROR_RECOGNIZER_BUSY ) || error == SpeechRecognizer.ERROR_NO_MATCH) {
+                System.out.println("Restarted because error");
+                restartRecognizer();
+                return;
+            }
+
 //            if (error == 7 || error == 6){
 //                sr.cancel();
 //                launchRecognizer();
